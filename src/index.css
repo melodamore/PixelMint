@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+@theme {
+  --color-mint: #10b981;
+  --color-mint-glow: #34d399;
+  --color-neon-pink: #f43f5e;
+  --color-space-base: #030712;
+  --color-space-surface: rgba(17, 24, 39, 0.6);
+}
+
+body {
+  background-color: var(--color-space-base);
+  color: #f8fafc;
+  overscroll-behavior-y: none;
+  touch-action: none;
+}
