@@ -36,19 +36,15 @@ export const getRectIndices = (x0, y0, x1, y1, gridSize, fill = false) => {
     }
   } else {
     for (let x = minX; x <= maxX; x++) {
-      if (x >= 0 && x < gridSize) {
-        if (minY >= 0 && minY < gridSize) indices.push(minY * gridSize + x);
-        if (maxY >= 0 && maxY < gridSize && minY !== maxY) indices.push(maxY * gridSize + x);
-      }
+      if (x >= 0 && x < gridSize && minY >= 0 && minY < gridSize) indices.push(minY * gridSize + x);
+      if (x >= 0 && x < gridSize && maxY >= 0 && maxY < gridSize) indices.push(maxY * gridSize + x);
     }
-    for (let y = minY + 1; y < maxY; y++) {
-      if (y >= 0 && y < gridSize) {
-        if (minX >= 0 && minX < gridSize) indices.push(y * gridSize + minX);
-        if (maxX >= 0 && maxX < gridSize && minX !== maxX) indices.push(y * gridSize + maxX);
-      }
+    for (let y = minY; y <= maxY; y++) {
+      if (minX >= 0 && minX < gridSize && y >= 0 && y < gridSize) indices.push(y * gridSize + minX);
+      if (maxX >= 0 && maxX < gridSize && y >= 0 && y < gridSize) indices.push(y * gridSize + maxX);
     }
   }
-  return indices;
+  return [...new Set(indices)];
 };
 
 export const getCircleIndices = (xc, yc, r, gridSize, fill = false) => {
@@ -183,40 +179,47 @@ export const getPolygonIndices = (xc, yc, sides, radius, angleOffset, gridSize, 
   }
 
   if (fill) {
-      // Very basic scanline fill for polygon
+      // Ray casting for point in polygon
+      let minX = gridSize, maxX = -1;
       let minY = gridSize, maxY = -1;
-      for(let [, vy] of vertices) {
+      for (let [vx, vy] of vertices) {
+          if (vx < minX) minX = vx;
+          if (vx > maxX) maxX = vx;
           if (vy < minY) minY = vy;
           if (vy > maxY) maxY = vy;
       }
+      minX = Math.max(0, minX);
+      maxX = Math.min(gridSize - 1, maxX);
       minY = Math.max(0, minY);
       maxY = Math.min(gridSize - 1, maxY);
 
       let indices = [];
-      for(let y = minY; y <= maxY; y++) {
-          let nodes = [];
-          let j = sides - 1;
-          for(let i = 0; i < sides; i++) {
-              let [vxi, vyi] = vertices[i];
-              let [vxj, vyj] = vertices[j];
-              if ((vyi < y && vyj >= y) || (vyj < y && vyi >= y)) {
-                  nodes.push(Math.round(vxi + (y - vyi) / (vyj - vyi) * (vxj - vxi)));
+      for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+              let inside = false;
+              for (let i = 0, j = sides - 1; i < sides; j = i++) {
+                  let xi = vertices[i][0], yi = vertices[i][1];
+                  let xj = vertices[j][0], yj = vertices[j][1];
+
+                  let intersect = ((yi > y) !== (yj > y))
+                      && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                  if (intersect) inside = !inside;
               }
-              j = i;
-          }
-          nodes.sort((a,b) => a - b);
-          for(let i=0; i<nodes.length; i+=2) {
-              if (nodes[i] >= gridSize) break;
-              if (nodes[i+1] > 0) {
-                  if(nodes[i] < 0) nodes[i] = 0;
-                  if(nodes[i+1] > gridSize) nodes[i+1] = gridSize;
-                  for(let x=nodes[i]; x<=nodes[i+1]; x++) {
-                      if (x>=0 && x<gridSize) indices.push(y*gridSize + x);
-                  }
+              if (inside) {
+                  indices.push(y * gridSize + x);
               }
           }
       }
-      return [...new Set(indices)];
+      // Raycasting might miss boundary pixels depending on math precision,
+      // so always combine with polygon outline to ensure perfection
+      const outline = new Set();
+      for (let i = 0; i < sides; i++) {
+        const next = (i + 1) % sides;
+        const line = getLineIndices(vertices[i][0], vertices[i][1], vertices[next][0], vertices[next][1], gridSize);
+        line.forEach(idx => outline.add(idx));
+      }
+
+      return [...new Set([...indices, ...Array.from(outline)])];
   }
 
   const indices = new Set();

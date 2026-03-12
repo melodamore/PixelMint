@@ -379,15 +379,7 @@ export const usePixelEngine = () => {
 
   // Touch logic - optimized with bounding client rect
   const handleTouchStart = useCallback((e) => {
-    if (e.touches.length === 2) {
-      setIsDrawing(false);
-      lastTouch.current = {
-        dist: Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY),
-        midX: (e.touches[0].clientX + e.touches[1].clientX)/2,
-        midY: (e.touches[0].clientY + e.touches[1].clientY)/2
-      };
-    }
-    else if (e.touches.length === 1) {
+    if (e.touches.length === 1) {
        startInteraction(e.touches[0].clientX, e.touches[0].clientY);
     }
   }, [startInteraction]);
@@ -396,23 +388,10 @@ export const usePixelEngine = () => {
     // Prevent default scrolling when drawing
     if (e.cancelable) e.preventDefault();
 
-    if (e.touches.length === 2 && lastTouch.current) {
-      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      if (lastTouch.current.dist === 0) return;
-      const midX = (e.touches[0].clientX + e.touches[1].clientX)/2;
-      const midY = (e.touches[0].clientY + e.touches[1].clientY)/2;
-
-      setZoom(z => Math.min(Math.max(0.5, z * (dist / lastTouch.current.dist)), 5));
-      setPan(p => ({
-        x: p.x + (midX - lastTouch.current.midX) / zoom,
-        y: p.y + (midY - lastTouch.current.midY) / zoom
-      }));
-
-      lastTouch.current = { dist, midX, midY };
-    } else if (e.touches.length === 1) {
+    if (e.touches.length === 1) {
        moveInteraction(e.touches[0].clientX, e.touches[0].clientY);
     }
-  }, [zoom, pan, moveInteraction]);
+  }, [moveInteraction]);
 
   const handleTouchEnd = useCallback(() => {
     endInteraction();
