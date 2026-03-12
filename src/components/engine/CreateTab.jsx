@@ -3,15 +3,42 @@ import { AnimatePresence } from 'framer-motion';
 import {
   ChevronDown, Trash2, Undo, Grid as GridIcon, SplitSquareHorizontal,
   Layers as LayersIcon, Film, Pause, Play, Plus, Copy,
-  ZoomIn, Maximize, ZoomOut
+  ZoomIn, Maximize, ZoomOut, Pencil, Eraser, PaintBucket,
+  Slash, Square, Circle, MousePointer2, Move, Hexagon
 } from 'lucide-react';
 import { usePixelEngine } from '../../hooks/usePixelEngine';
 import DangerModal from '../modals/DangerModal';
 import LayersModal from '../modals/LayersModal';
 import { createLayer } from '../../utils/canvasUtils';
+import { PRESET_PALETTES, getSavedPalettes, savePalette } from '../../utils/paletteUtils';
 
 const CreateTab = ({ onSaveArt }) => {
-  const { activeMenu, setActiveMenu, gridSize, setDangerAction, dangerAction, frames, applyGridSize, history, setFrames, setHistory, showGrid, setShowGrid, symmetry, setSymmetry, showLayers, setShowLayers, currL, isAnimMode, setIsAnimMode, isPlaying, setIsPlaying, currF, setCurrF, saveState, zoom, setZoom, pan, setPan, canvasRef, handleTouchStart, handleTouchMove, handleTouchEnd, handleMouseLeave, handleMouseUp, isDrawing, setIsDrawing, paintPixel, color, setColor, setCurrL } = usePixelEngine();
+  const {
+    activeMenu, setActiveMenu, gridSize, setDangerAction, dangerAction,
+    frames, applyGridSize, history, setFrames, setHistory,
+    showGrid, setShowGrid, symmetry, setSymmetry, showLayers, setShowLayers,
+    currL, isAnimMode, setIsAnimMode, isPlaying, setIsPlaying, currF, setCurrF,
+    saveState, zoom, setZoom, pan, setPan, canvasRef,
+    handleTouchStart, handleTouchMove, handleTouchEnd,
+    startInteraction, moveInteraction, endInteraction,
+    color, setColor, setCurrL, activeTool, setActiveTool,
+    toolOptions, setToolOptions, draftLayer, selectionMask
+  } = usePixelEngine();
+
+  const [currentPalette, setCurrentPalette] = React.useState('default');
+  const allPalettes = { ...PRESET_PALETTES, ...getSavedPalettes() };
+  const currentColors = allPalettes[currentPalette] || PRESET_PALETTES['default'];
+
+  const tools = [
+    { id: 'pencil', icon: Pencil },
+    { id: 'eraser', icon: Eraser },
+    { id: 'fill', icon: PaintBucket },
+    { id: 'line', icon: Slash },
+    { id: 'rect', icon: Square },
+    { id: 'circle', icon: Circle },
+    { id: 'polygon', icon: Hexagon },
+    { id: 'select_rect', icon: MousePointer2 }
+  ];
 
 
   return (
@@ -27,7 +54,7 @@ const CreateTab = ({ onSaveArt }) => {
               {gridSize}x{gridSize} <ChevronDown size={14} />
             </button>
             {activeMenu === 'grid' && (
-              <div className="absolute right-0 top-full mt-2 bg-space-surface border border-white/10 rounded-lg shadow-xl flex flex-col overflow-hidden w-24 backdrop-blur-md">
+              <div className="absolute right-0 top-full mt-2 bg-space-surface border border-white/10 rounded-lg shadow-xl flex flex-col overflow-hidden w-24 backdrop-blur-md z-50">
                 {[16, 24, 32, 48, 64].map(s => (
                   <button key={s} onClick={() => {
                     setActiveMenu(null);
@@ -44,6 +71,22 @@ const CreateTab = ({ onSaveArt }) => {
 
           <button onClick={() => setDangerAction({type: 'clear'})} className="p-2 text-slate-400 hover:text-neon-pink"><Trash2 size={18} /></button>
         </div>
+      </div>
+
+      {/* Tools Panel (Horizontal Scroll) */}
+      <div className="w-[90vw] max-w-[350px] flex gap-2 bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-2 mb-3 z-20 overflow-x-auto hide-scrollbar">
+          {tools.map(t => {
+             const Icon = t.icon;
+             return (
+                 <button
+                     key={t.id}
+                     onClick={() => setActiveTool(t.id)}
+                     className={`p-2 rounded-lg flex-shrink-0 transition-colors ${activeTool === t.id ? 'bg-mint text-black' : 'text-slate-300 hover:bg-white/10'}`}
+                 >
+                     <Icon size={18} />
+                 </button>
+             )
+          })}
       </div>
 
       {/* Main Toolbar */}
@@ -108,6 +151,21 @@ const CreateTab = ({ onSaveArt }) => {
                </div>
              )
           ))}
+          {/* Draft Layer for Shapes/Selection preview */}
+          {draftLayer && (
+               <div className="absolute inset-0 grid p-1 pointer-events-none z-20" style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}>
+                  {draftLayer.pixels.map((px, i) => <div key={`draft-${i}`} className="w-full h-full" style={{ backgroundColor: px }} />)}
+               </div>
+          )}
+          {/* Selection Mask Overlay (Marching Ants/Highlight) */}
+          {selectionMask.length > 0 && (
+               <div className="absolute inset-0 grid p-1 pointer-events-none z-10" style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}>
+                  {Array(gridSize * gridSize).fill(null).map((_, i) => (
+                      <div key={`sel-${i}`} className={`w-full h-full ${selectionMask.includes(i) ? 'bg-mint/30 border border-mint/50 animate-pulse' : ''}`} />
+                  ))}
+               </div>
+          )}
+
           {/* Interaction Overlay */}
           <div
             ref={canvasRef}
@@ -115,53 +173,85 @@ const CreateTab = ({ onSaveArt }) => {
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            onMouseLeave={handleMouseLeave}
-            onMouseUp={handleMouseUp}
+            onMouseLeave={() => endInteraction()}
+            onMouseUp={() => endInteraction()}
           >
              {/* Using a single element for the grid interactions instead of many small ones,
                  then calculating the hit testing based on coordinates in the mouse handlers */}
              <div
                 className="w-full h-full"
-                onMouseDown={(e) => {
-                  saveState();
-                  setIsDrawing(true);
-                  if (canvasRef.current) {
-                    const rect = canvasRef.current.getBoundingClientRect();
-                    const x = (e.clientX - rect.left - rect.width / 2 - pan.x * zoom) / zoom + rect.width / 2;
-                    const y = (e.clientY - rect.top - rect.height / 2 - pan.y * zoom) / zoom + rect.height / 2;
-
-                    if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
-                      const col = Math.floor((x / rect.width) * gridSize);
-                      const row = Math.floor((y / rect.height) * gridSize);
-                      paintPixel(row * gridSize + col);
-                    }
-                  }
-                }}
-                onMouseMove={(e) => {
-                  if (isDrawing) {
-                    if (canvasRef.current) {
-                      const rect = canvasRef.current.getBoundingClientRect();
-                      const x = (e.clientX - rect.left - rect.width / 2 - pan.x * zoom) / zoom + rect.width / 2;
-                      const y = (e.clientY - rect.top - rect.height / 2 - pan.y * zoom) / zoom + rect.height / 2;
-
-                      if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
-                        const col = Math.floor((x / rect.width) * gridSize);
-                        const row = Math.floor((y / rect.height) * gridSize);
-                        paintPixel(row * gridSize + col);
-                      }
-                    }
-                  }
-                }}
+                onMouseDown={(e) => startInteraction(e.clientX, e.clientY)}
+                onMouseMove={(e) => moveInteraction(e.clientX, e.clientY)}
              />
           </div>
         </div>
       </div>
 
+      {/* Tool Options Menu */}
+      <AnimatePresence>
+        {['fill', 'select_wand', 'polygon', 'circle', 'rect', 'ellipse'].includes(activeTool) && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="w-[90vw] max-w-[350px] bg-white/5 p-2 rounded-lg backdrop-blur-md border border-white/10 z-10 mb-2 flex flex-wrap gap-2 text-xs items-center">
+                {activeTool === 'fill' && (
+                    <>
+                       <span className="text-slate-400 font-bold uppercase tracking-wider">Fill Mode:</span>
+                       <select value={toolOptions.fillMode} onChange={(e) => setToolOptions({...toolOptions, fillMode: e.target.value})} className="bg-space-surface border border-white/10 rounded px-2 py-1 text-white">
+                           <option value="contiguous">Contiguous</option>
+                           <option value="global">Global</option>
+                       </select>
+                    </>
+                )}
+                {['fill', 'select_wand'].includes(activeTool) && (
+                    <div className="flex items-center gap-2 w-full">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider min-w-[70px]">Tolerance:</span>
+                        <input type="range" min="0" max="1" step="0.05" value={toolOptions.fillTolerance} onChange={(e) => setToolOptions({...toolOptions, fillTolerance: parseFloat(e.target.value)})} className="flex-1 accent-mint" />
+                        <span className="text-white w-8 text-right">{Math.round(toolOptions.fillTolerance * 100)}%</span>
+                    </div>
+                )}
+                {['rect', 'circle', 'ellipse', 'polygon'].includes(activeTool) && (
+                    <>
+                       <label className="flex items-center gap-1 text-slate-300 font-bold uppercase tracking-wider">
+                           <input type="checkbox" checked={toolOptions.shapeFill} onChange={(e) => setToolOptions({...toolOptions, shapeFill: e.target.checked})} className="accent-mint"/>
+                           Fill Shape
+                       </label>
+                    </>
+                )}
+                {activeTool === 'polygon' && (
+                    <div className="flex items-center gap-2 w-full mt-1">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider min-w-[70px]">Sides:</span>
+                        <input type="range" min="3" max="12" step="1" value={toolOptions.polygonSides} onChange={(e) => setToolOptions({...toolOptions, polygonSides: parseInt(e.target.value)})} className="flex-1 accent-mint" />
+                        <span className="text-white w-4 text-right">{toolOptions.polygonSides}</span>
+                    </div>
+                )}
+            </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Palette */}
-      <div className="flex gap-4 mt-4 bg-white/5 p-3 rounded-2xl backdrop-blur-md border border-white/10 z-10 overflow-x-auto w-[90vw] max-w-[350px]">
-        {['#10b981', '#f43f5e', '#3b82f6', '#fbbf24', '#a855f7', '#ffffff', '#000000', 'transparent'].map((c) => (
-          <button key={c} onClick={() => setColor(c)} className={`min-w-8 h-8 rounded-full border-2 ${color === c ? 'border-white scale-110' : 'border-transparent'}`} style={{ backgroundColor: c === 'transparent' ? '#1f2937' : c, backgroundImage: c === 'transparent' ? 'radial-gradient(#4b5563 1px, transparent 1px)' : 'none', backgroundSize: c === 'transparent' ? '4px 4px' : 'auto' }} />
-        ))}
+      <div className="flex flex-col gap-2 mt-4 bg-white/5 p-3 rounded-2xl backdrop-blur-md border border-white/10 z-10 w-[90vw] max-w-[350px]">
+        <div className="flex justify-between items-center mb-1">
+           <select value={currentPalette} onChange={(e) => setCurrentPalette(e.target.value)} className="bg-transparent text-xs font-bold text-slate-300 font-['Orbitron'] outline-none border-b border-white/20 pb-1">
+              <option value="default" className="bg-space-surface">Default Palette</option>
+              <option value="nes" className="bg-space-surface">NES Retro</option>
+              <option value="gameboy" className="bg-space-surface">Gameboy</option>
+              <option value="pico8" className="bg-space-surface">Pico-8</option>
+              {Object.keys(getSavedPalettes()).map(p => <option key={p} value={p} className="bg-space-surface">{p}</option>)}
+           </select>
+           <button onClick={() => {
+              const name = prompt('Name your new palette:');
+              if(name) {
+                 const customColors = Array.from(new Set(frames[0].layers[0].pixels.filter(c => c !== 'transparent'))).slice(0, 16);
+                 if(customColors.length === 0) customColors.push('#ffffff');
+                 customColors.push('transparent');
+                 savePalette(name, customColors);
+                 setCurrentPalette(name);
+              }
+           }} className="text-[10px] bg-white/10 px-2 py-1 rounded text-slate-300 hover:text-white uppercase font-bold tracking-wider">Extract</button>
+        </div>
+        <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar">
+          {currentColors.map((c, i) => (
+            <button key={i} onClick={() => setColor(c)} className={`min-w-8 h-8 rounded-full border-2 flex-shrink-0 transition-transform ${color === c ? 'border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.5)]' : 'border-transparent'}`} style={{ backgroundColor: c === 'transparent' ? '#1f2937' : c, backgroundImage: c === 'transparent' ? 'radial-gradient(#4b5563 1px, transparent 1px)' : 'none', backgroundSize: c === 'transparent' ? '4px 4px' : 'auto' }} />
+          ))}
+        </div>
       </div>
 
       <button onClick={() => onSaveArt({ id: Date.now(), title: `Mint #${Math.floor(Math.random()*1000)}`, pixels: frames[0].layers[0].pixels, isAnim: isAnimMode, gridSize: gridSize })} className="mt-4 w-[90vw] max-w-[350px] py-4 rounded-xl font-['Orbitron'] font-bold text-black bg-mint shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] transition-shadow uppercase tracking-widest z-10">Save to Vault</button>
