@@ -13,11 +13,18 @@ import CreateTab from './components/engine/CreateTab';
 const App = () => {
   const [activeTab, setActiveTab] = useState('Home');
   const [savedArts, setSavedArts] = useState([]);
+  const [showBottomNav, setShowBottomNav] = useState(true);
 
   useEffect(() => {
     WebApp.ready();
     WebApp.expand();
     WebApp.setHeaderColor('#030712');
+
+    const handleToggleNav = (e) => {
+      setShowBottomNav(e.detail);
+    };
+    window.addEventListener('toggle-bottom-nav', handleToggleNav);
+    return () => window.removeEventListener('toggle-bottom-nav', handleToggleNav);
   }, []);
 
   const tabs = [
@@ -42,39 +49,41 @@ const App = () => {
          </AnimatePresence>
        </div>
 
-       <div className="h-20 bg-[#030712]/95 backdrop-blur-lg border-t border-mint/20 px-2 flex justify-between items-center pb-safe z-40 relative">
-         {tabs.slice(0, 2).map((tab) => {
-           const Icon = tab.icon;
-           const isActive = activeTab === tab.id;
-           return (
-             <button key={tab.id} onClick={() => setActiveTab(tab.id)} className="relative flex-1 flex flex-col items-center justify-center h-full group">
-               <motion.div animate={{ scale: isActive ? 1.1 : 1, color: isActive ? '#10b981' : '#64748b' }} className="mb-1"><Icon strokeWidth={isActive ? 2.5 : 2} size={22} className="group-active:scale-95 transition-transform" /></motion.div>
-               <motion.span animate={{ color: isActive ? '#10b981' : '#64748b' }} className="text-[9px] font-bold tracking-wide uppercase font-['Rajdhani']">{tab.id}</motion.span>
-             </button>
-           );
-         })}
+       {showBottomNav && (
+         <div className="h-20 bg-[#030712]/95 backdrop-blur-lg border-t border-mint/20 px-2 flex justify-between items-center pb-safe z-40 relative">
+           {tabs.slice(0, 2).map((tab) => {
+             const Icon = tab.icon;
+             const isActive = activeTab === tab.id;
+             return (
+               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className="relative flex-1 flex flex-col items-center justify-center h-full group">
+                 <motion.div animate={{ scale: isActive ? 1.1 : 1, color: isActive ? '#10b981' : '#64748b' }} className="mb-1"><Icon strokeWidth={isActive ? 2.5 : 2} size={22} className="group-active:scale-95 transition-transform" /></motion.div>
+                 <motion.span animate={{ color: isActive ? '#10b981' : '#64748b' }} className="text-[9px] font-bold tracking-wide uppercase font-['Rajdhani']">{tab.id}</motion.span>
+               </button>
+             );
+           })}
 
-         {/* Center FAB for Create */}
-         <div className="relative flex-1 flex justify-center -mt-8">
-           <button
-             onClick={() => setActiveTab('Create')}
-             className={`w-14 h-14 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] border-4 border-[#030712] transition-transform active:scale-90 ${activeTab === 'Create' ? 'bg-mint' : 'bg-mint/80'}`}
-           >
-             <Grid3X3 size={24} className={activeTab === 'Create' ? 'text-black' : 'text-black'} strokeWidth={2.5} />
-           </button>
+           {/* Center FAB for Create */}
+           <div className="relative flex-1 flex justify-center -mt-8">
+             <button
+               onClick={() => setActiveTab('Create')}
+               className={`w-14 h-14 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] border-4 border-[#030712] transition-transform active:scale-90 ${activeTab === 'Create' ? 'bg-mint' : 'bg-mint/80'}`}
+             >
+               <Grid3X3 size={24} className={activeTab === 'Create' ? 'text-black' : 'text-black'} strokeWidth={2.5} />
+             </button>
+           </div>
+
+           {tabs.slice(2, 4).map((tab) => {
+             const Icon = tab.icon;
+             const isActive = activeTab === tab.id;
+             return (
+               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className="relative flex-1 flex flex-col items-center justify-center h-full group">
+                 <motion.div animate={{ scale: isActive ? 1.1 : 1, color: isActive ? '#10b981' : '#64748b' }} className="mb-1"><Icon strokeWidth={isActive ? 2.5 : 2} size={22} className="group-active:scale-95 transition-transform" /></motion.div>
+                 <motion.span animate={{ color: isActive ? '#10b981' : '#64748b' }} className="text-[9px] font-bold tracking-wide uppercase font-['Rajdhani']">{tab.id}</motion.span>
+               </button>
+             );
+           })}
          </div>
-
-         {tabs.slice(2, 4).map((tab) => {
-           const Icon = tab.icon;
-           const isActive = activeTab === tab.id;
-           return (
-             <button key={tab.id} onClick={() => setActiveTab(tab.id)} className="relative flex-1 flex flex-col items-center justify-center h-full group">
-               <motion.div animate={{ scale: isActive ? 1.1 : 1, color: isActive ? '#10b981' : '#64748b' }} className="mb-1"><Icon strokeWidth={isActive ? 2.5 : 2} size={22} className="group-active:scale-95 transition-transform" /></motion.div>
-               <motion.span animate={{ color: isActive ? '#10b981' : '#64748b' }} className="text-[9px] font-bold tracking-wide uppercase font-['Rajdhani']">{tab.id}</motion.span>
-             </button>
-           );
-         })}
-       </div>
+       )}
     </div>
   );
 };
